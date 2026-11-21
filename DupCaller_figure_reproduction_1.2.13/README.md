@@ -69,4 +69,3 @@ panels (Figs 3b/d/e/g, 4c, 5c, 6c/d, S5); the counts for the spectra are in `dat
 - Fig S4's call-out text is generated from the data (the highlighted neuron sample, PD43289, has a duplication rate of 75.4%).
 - Error bars in Figs 2b–d and S6 are mean ± SD (deterministic; matches the figure legends).
 - `SBS96_cosine_similarity.csv` uses the same method, comparisons and seed (20261119) as `data/source_data_spectra/calculate_cosine_similarity.py` and reproduces `data/source_data_spectra/SBS96_cosine_similarity.csv` (differences ≤ 1e-15). The resampling adds ~20 s to a run.
-- Fig S6 is drawn from the `runtime` tab; the NanoSeq "total" bar there (~21 h) differs from the v8 PDF panel (~14.7 h).
