@@ -1,0 +1,12 @@
+# macOS / Office debris
+.DS_Store
+__MACOSX/
+~$*
+._*
+
+# Python
+__pycache__/
+*.pyc
+
+# local Claude Code settings
+.claude/settings.local.json

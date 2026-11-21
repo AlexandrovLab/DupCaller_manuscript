@@ -1,0 +1,21 @@
+cohort	rescue_flag	number
+Ê Aristolochic Acid	normal_vaf	250
+Ê Aristolochic Acid	cov_mask	213
+Ê Aristolochic Acid	high_nm	151
+Ê Aristolochic Acid	nm_mask	49
+Ê Aristolochic Acid	trim_mask	4
+Ê Aristolochic Acid	low_ASXS	2
+Ê Aristolochic Acid	low_mapq	1
+Ê Cord blood	cov_mask	5
+Ê Cord blood	underpowered	4
+Ê Cord blood	high_nm	2
+Ê Cord blood	normal_vaf	1
+Ê Neuron	cov_mask	192
+Ê Neuron	high_nm	76
+Ê Neuron	nm_mask	28
+Ê Neuron	normal_vaf	18
+Ê Neuron	not_found	4
+Ê Neuron	no_good_alt_read	2
+Ê Neuron	trim_mask	2
+Ê Neuron	low_ASXS	1
+Ê Neuron	strand_independence	1

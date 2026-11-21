@@ -1,0 +1,8 @@
+# tested: pandas 2.2.3 / 3.0.5, matplotlib 3.9.2 / 3.11.2, seaborn 0.13.2, scipy 1.14-1.18, Python 3.13
+pandas>=2.2
+numpy>=1.26
+matplotlib>=3.9
+seaborn==0.13.2
+scipy>=1.11
+openpyxl>=3.1
+jupyter        # only needed for the notebook
