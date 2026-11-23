@@ -3,53 +3,43 @@ import sys
 import numpy as np
 from matplotlib import pyplot as plt
 import pandas as pd
-tp_vcf = VCF(sys.argv[1],'r')
-fp_vcf = VCF(sys.argv[2],'r')
-fn_vcf = VCF(sys.argv[3],'r')
-cuts = set()
-fn_num = 0
-for rec in fn_vcf:
-    fn_num += 1
-for rec in tp_vcf:
-    GTmin = rec.info["FDR"]
-    cuts.update((GTmin,))
-for rec in fp_vcf:
-    GTmin = rec.info["FDR"]
-    cuts.update((GTmin,)) 
-cuts = np.array(sorted(list(cuts)))
-tp_mat = np.zeros(cuts.size)
-fp_mat = np.zeros(cuts.size)
-#fn_mat = np.ones(cuts.size)*fn_num
-tp_vcf = VCF(sys.argv[1],'r')
-fp_vcf = VCF(sys.argv[2],'r')
-for rec in tp_vcf:
-    GTmin = rec.info["FDR"]
-    tp_mat[np.searchsorted(cuts,GTmin)] += 1
-for rec in fp_vcf:
-    GTmin = rec.info["FDR"]
-    fp_mat[np.searchsorted(cuts,GTmin)] += 1
-tp_mat = np.cumsum(tp_mat)
-fp_mat = np.cumsum(fp_mat)
-fn_num = fn_num + max(tp_mat)
-fn_mat = fn_num - tp_mat
+
+DEFAULT_FDR = 0.05   # DupCaller default operating point: calls with lFDR <= 0.05
+
+def fdr_values(path):
+    return np.array([rec.info["FDR"] for rec in VCF(path, 'r')], dtype=float)
+
+tp_fdr = np.sort(fdr_values(sys.argv[1]))
+fp_fdr = np.sort(fdr_values(sys.argv[2]))
+fn_num = sum(1 for _ in VCF(sys.argv[3], 'r'))
+
+# One threshold per distinct FDR value. Row i counts the calls with FDR <= cuts[i]
+# (side="right" keeps calls whose FDR equals the threshold).
+cuts = np.unique(np.concatenate([tp_fdr, fp_fdr]))
+tp_mat = np.searchsorted(tp_fdr, cuts, side="right").astype(float)
+fp_mat = np.searchsorted(fp_fdr, cuts, side="right").astype(float)
+truth_num = fn_num + tp_fdr.size          # FN outside the call set + every TP call
+fn_mat = truth_num - tp_mat
 prec = tp_mat/(tp_mat+fp_mat)
 rec = tp_mat/(tp_mat+fn_mat)
 f1 = 2* tp_mat / (2*tp_mat + fp_mat + fn_mat)
-#thr_ind = np.searchsorted(cuts,np.arange(0,10,0.1))
-thr_ind = np.searchsorted(cuts,0.05)
-#plt.plot(rec[thr_ind[0]:thr_ind[-1]],prec[thr_ind[0]:thr_ind[-1]])
+
+# Default operating point: the last threshold <= DEFAULT_FDR (inclusive).
+thr_ind = np.searchsorted(cuts, DEFAULT_FDR, side="right") - 1
 plt.plot(rec,prec)
-plt.ylabel("preicision")
+plt.ylabel("precision")
 plt.xlabel("recall")
 plt.ylim(0, 1.05)
 plt.xlim(0, 0.8)
-print(cuts[thr_ind-1:thr_ind+1],prec[thr_ind-1],rec[thr_ind-1],tp_mat[thr_ind-1],fp_mat[thr_ind-1],fn_mat[thr_ind-1])
+# stdout (saved as <sample>.recall.log): [cut at/below DEFAULT_FDR, next cut] precision recall tp fp fn
+if thr_ind < 0:
+    # no call has FDR <= DEFAULT_FDR: nothing is called, precision is undefined
+    print(f"WARNING: no calls with FDR <= {DEFAULT_FDR}", file=sys.stderr)
+    print(cuts[:1], np.nan, 0.0, 0.0, 0.0, float(truth_num))
+else:
+    print(cuts[thr_ind:thr_ind+2],prec[thr_ind],rec[thr_ind],tp_mat[thr_ind],fp_mat[thr_ind],fn_mat[thr_ind])
 output_pd = pd.DataFrame({"precision":prec.copy(),"recall":rec.copy(),"tp":tp_mat.copy(),"fp":fp_mat.copy(),"fn":fn_mat.copy(),"thr":cuts.copy()})
-#print(output_pd)
 output_pd.to_csv(sys.argv[6],sep='\t',index=False)
-#plt.scatter(rec[thr_ind[0:35]],prec[thr_ind[0:35]],s=50,marker="o")
-#print(prec,rec,tp_mat,fp_mat,cuts)
-#plt.savefig(sys.argv[4],dpi=300)
 plt.figure()
 plt.plot(cuts,f1)
 plt.xlabel("FDR threshold")

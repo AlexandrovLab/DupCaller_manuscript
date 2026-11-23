@@ -1,3 +1,19 @@
+"""Downsample duplex read families to five F1R2 x F2R1 compositions.
+
+Usage:
+  randomly_downsample_read_family.py <in.bam> <out_prefix> <seed>
+
+Writes <out_prefix>_{1x1,1x2,2x1,1xn,nx1}.bam. These BAMs are NOT coordinate
+sorted (each read is written when its family is processed, its mate later at
+the mate's position) and are not indexed, so sort and index them before
+running DupCaller:
+
+  for c in 1x1 1x2 2x1 1xn nx1; do
+      samtools sort -@ 8 -o <out_prefix>_${c}.sorted.bam <out_prefix>_${c}.bam
+      mv <out_prefix>_${c}.sorted.bam <out_prefix>_${c}.bam
+      samtools index <out_prefix>_${c}.bam
+  done
+"""
 import sys
 from pysam import VariantFile as VCF
 from pysam import AlignmentFile as BAM

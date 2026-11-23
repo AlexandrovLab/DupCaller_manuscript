@@ -20,11 +20,10 @@ and given a BQ at the site:
          the read base after the base aligned to the VCF anchor)
 
 A record passes when
-  1) >= --min-support (3) supporting reads have BQ >= --min-bq (18), and
-     every family read with BQ >= 18 supports the variant;
-  2) at most --max-nonsupport (1) read does not support the variant, and each
-     such read has BQ < 18;
-  3) the consensus base quality is > --min-cq (60) on BOTH strands (F1R2 and
+  1) at most --max-nonsupport (1) family read does not support the variant,
+     and each such read has BQ < --min-bq (18), i.e. every family read with
+     BQ >= 18 supports the variant;
+  2) the consensus base quality is > --min-cq (60) on BOTH strands (F1R2 and
      F2R1): SBS at the variant base (min over MNV bases), indel at anchor+1.
      Consensus = posterior Phred quality under the independent-error model
      (see family_consensus_filter.consensus_quality), computed from the
@@ -33,7 +32,7 @@ A record passes when
 
 Usage:
   family_bq_filter.py -i calls.vcf -b sample.bam -o out.vcf [-f ref.fa]
-      [--min-bq 18] [--min-support 3] [--max-nonsupport 1] [--min-cq 60]
+      [--min-bq 18] [--max-nonsupport 1] [--min-cq 60]
       [--cq-include-dissent] [--all] [--allow-noncovering]
 """
 import argparse
@@ -177,7 +176,6 @@ def new_header(a):
         '##INFO=<ID=FAM_CQ,Number=2,Type=Float,Description="Consensus base quality F1R2,F2R1 (SBS: variant base, min over MNV bases; indel: base at anchor+1)">',
         '##FILTER=<ID=family_not_found,Description="No reads with SP/TAG1/TAG2 (and TL) found in the BAM">',
         '##FILTER=<ID=ambiguous_family,Description="Several template-length groups at SP match TAG1/TAG2 and F1R2/F2R1; family not determinable">',
-        f'##FILTER=<ID=low_hq_support,Description="Fewer than {a.min_support} supporting reads with BQ>={a.min_bq}">',
         f'##FILTER=<ID=hq_dissent,Description="A family read not supporting the variant has BQ>={a.min_bq} (or does not cover the site)">',
         f'##FILTER=<ID=too_many_dissent,Description="More than {a.max_nonsupport} family read(s) do not support the variant">',
         f'##FILTER=<ID=low_consensus_bq,Description="Consensus base quality <= {a.min_cq:g} on at least one strand">',
@@ -191,8 +189,6 @@ def main():
     ap.add_argument("-o", "--out", required=True)
     ap.add_argument("-f", "--reference", default=DEFAULT_REF, help="needed for indels")
     ap.add_argument("--min-bq", type=int, default=18, help="high-quality read base BQ, >=, default 18")
-    ap.add_argument("--min-support", type=int, default=3,
-                    help="min supporting reads with BQ>=--min-bq, default 3")
     ap.add_argument("--max-nonsupport", type=int, default=1,
                     help="max nonsupporting reads (each must have BQ<--min-bq), default 1")
     ap.add_argument("--min-cq", type=float, default=60, help="per-strand consensus BQ, strict >, default 60")
@@ -254,8 +250,6 @@ def main():
             if not a.allow_noncovering:
                 dissent += noncover
             if status == "ok":
-                if sup_hq < a.min_support:
-                    fails.append("low_hq_support")
                 if any(bq is None or bq >= a.min_bq for _, _, bq, _ in dissent):
                     fails.append("hq_dissent")
                 if len(dissent) > a.max_nonsupport:

@@ -25,19 +25,22 @@ python DupCaller_manuscript_plots.py     # ~1 min; rewrites DupCaller_manuscript
 
 Or open `DupCaller_manuscript_plots.ipynb` in Jupyter and choose *Run All*.
 Paths are relative to this folder, so it can be moved or zipped as a whole.
+All text is set in Arial Bold. Arial is not bundled (it is not freely redistributable): the script uses the system Arial,
+or `Arial.ttf` / `Arial Bold.ttf` from `$ARIAL_FONT_DIR`, a `fonts/` folder here, or an installed `sigProfilerPlotting`;
+otherwise it prints a warning and falls back to another sans-serif font.
 Tested with Python 3.13 using both pandas 2.2 / matplotlib 3.9 and pandas 3.0 / matplotlib 3.11 (seaborn 0.13.2).
 
 ## Inputs (`data/`)
 
 | File | Contents | Used for |
 |---|---|---|
-| `DupCaller_figure_data.xlsx` | Per-sample data, one tab per analysis (stored as values): `synthetic_SBS_summary`, `synthetic_indel_summary` (precision/recall/F1 per synthetic dataset), `AA_neuron_cordblood` (shared/caller-specific counts, burdens, duplication rate per sample), `sperm_blood_saliva` (per-sample burdens and duplication rate), `runtime` (hours per sample, step and pipeline), `downsampling` (one row per downsampled dataset), `cordblood_CI_calculation` (Sample, Mutation Type, number, correction ratio, Caller — SBS96 calls and correction ratios per cord-blood sample for DupCaller and NanoSeq Software; Fig 4d) | all main figures, S2, S4, S6 |
+| `DupCaller_figure_data.xlsx` | Per-sample data, one tab per analysis (stored as values): `synthetic_SBS_summary`, `synthetic_indel_summary` (precision/recall/F1 per synthetic dataset), `AA_neuron_cordblood` (shared/caller-specific counts, burdens, duplication rate per sample), `sperm_blood_saliva` (per-sample burdens and duplication rate), `runtime` (hours per sample, step and pipeline), `downsampling` (one row per downsampled dataset; data rows only), `downsampling_totals` (SBS and indel totals of `calls_with_less_than_2_reads_on_at_least_one_strand` over the 17 neurons, as formulas on `downsampling`; checked by the script, not plotted), `cordblood_CI_calculation` (Sample, Mutation Type, number, correction ratio, Caller — SBS96 calls and correction ratios per cord-blood sample for DupCaller and NanoSeq Software; Fig 4d) | all main figures, S2, S4, S6 |
 | `synthetic_SBS_benchmark.xlsx` | `README` tab; `NanoSeq_Software_v3.5.5` (TP/FP/FN/precision/recall per dataset); one DupCaller precision–recall curve per dataset, tabs `SBS_n<N>_rep<R>` | Fig S1 |
 | `synthetic_indel_benchmark.xlsx` | same layout for indels (tabs `indel_n<N>_rep<R>`) | Fig S3 |
-| `NS_only_rescue/NS_only_rescue_SBS.tsv`, `NS_only_rescue_indel.tsv` | NanoSeq-specific calls per cohort, by the DupCaller step that excluded them (`cohort`, `rescue_flag`, `number`); not plotted by the script | Results/Methods "Analysis of NanoSeq-specific mutations", Response R1.3 |
+| `NS_only_rescue/NS_only_rescue_SBS.tsv`, `NS_only_rescue_indel.tsv` | NanoSeq-specific calls per cohort, by the DupCaller step that excluded them (`cohort`, `rescue_flag`, `number`); made by `nanoseq_comparison/ns_only_rescue/` (see the top-level README); not plotted by the script | Results/Methods "Analysis of NanoSeq-specific mutations", Response R1.3 |
 | `source_data_spectra/DupCaller_SBS96_ID83_spectra.xlsx` | SBS96 / ID83 counts behind the spectrum panels (spectra not plotted by the script; the SBS96 tab feeds the cosine-similarity table) | Figs 3b,d,e,g · 4c · 5c · 6c,d · S5 · Response Fig 1.3 · `SBS96_cosine_similarity.csv` |
 
-Tab ↔ previous supplementary-table numbering: `synthetic_SBS_summary` = Supp Table 1 (v5), `synthetic_indel_summary` = 2, `AA_neuron_cordblood` = 3, `sperm_blood_saliva` = 4, `runtime` = 5, `downsampling` = 6.
+Tab ↔ previous supplementary-table numbering: `synthetic_SBS_summary` = Supp Table 1 (v5), `synthetic_indel_summary` = 2, `AA_neuron_cordblood` = 3, `sperm_blood_saliva` = 4, `runtime` = 5, `downsampling` = 6 (its two total rows are now in `downsampling_totals`).
 Synthetic dataset names map to the original pipeline IDs as `SBS_n100_rep1` = `mock_100snp_1`, `indel_n10_rep1` = `mock_10indel_1`.
 
 ## Outputs (`DupCaller_manuscript_plots/`)
@@ -67,5 +70,6 @@ panels (Figs 3b/d/e/g, 4c, 5c, 6c/d, S5); the counts for the spectra are in `dat
 
 - Figure 4d: for both DupCaller and NanoSeq Software, the corrected SBS burden and its 95% Fay–Feuer (gamma) interval are computed from `cordblood_CI_calculation` (pooled over the six PD48442 samples, divided by duplex coverage, ×1/0.76 sensitivity factor); only the standard-WGS reference values (Abascal et al.) are entered in the script: SBS 1.18 × 10⁻⁸ (1.10–1.27 × 10⁻⁸) for Fig 4d and indel 6.5 × 10⁻¹⁰ (4.8–8.7 × 10⁻¹⁰) for Fig 5d. Figure 5d uses Poisson intervals computed from `AA_neuron_cordblood`.
 - Fig S4's call-out text is generated from the data (the highlighted neuron sample, PD43289, has a duplication rate of 75.4%).
+- Figs S1/S3: the DupCaller default operating point is the last curve row with lFDR threshold ≤ 0.05 (inclusive); if no call passes, no default point is drawn and a note is printed.
 - Error bars in Figs 2b–d and S6 are mean ± SD (deterministic; matches the figure legends).
 - `SBS96_cosine_similarity.csv` uses the same method, comparisons and seed (20261119) as `data/source_data_spectra/calculate_cosine_similarity.py` and reproduces `data/source_data_spectra/SBS96_cosine_similarity.csv` (differences ≤ 1e-15). The resampling adds ~20 s to a run.

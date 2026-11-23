@@ -92,6 +92,7 @@ CORD_CI = CORD_CI.drop(_bad.index.union(_dup.index))
 
 # AA_neuron_cordblood has trailing empty rows; cohort labels carry "(n=..)" in v5
 COHORTS = COHORTS.dropna(subset=["cohort"]).copy()
+COHORTS["cohort"] = COHORTS["cohort"].str.replace(r"\s*\(n=", " (n=", regex=True)   # "Neuron(n=17)" -> "Neuron (n=17)"
 is_AA = COHORTS["cohort"].str.startswith("Aristolochic")
 COHORTS_noAA = COHORTS[~is_AA].copy()
 COHORTS_AA = COHORTS[is_AA].copy()
@@ -244,13 +245,47 @@ PRINT_RC = {
     "legend.handlelength": 1.2, "legend.handletextpad": 0.4, "legend.borderaxespad": 0.3,
     "legend.labelspacing": 0.3, "legend.borderpad": 0.3,
     "axes.formatter.use_mathtext": True,     # axis multipliers drawn as ×10ⁿ instead of 1e-n
-    # one typeface everywhere (incl. the ×10ⁿ multipliers): Arial, or the metric-identical Liberation Sans
+    # one typeface everywhere, Arial Bold (incl. the ×10ⁿ multipliers, drawn in the regular text font)
     "font.family": "sans-serif",
     "font.sans-serif": ["Arial", "Helvetica", "Liberation Sans", "DejaVu Sans"],
     "mathtext.default": "regular",
+    "svg.fonttype": "path",                  # SVG text drawn as Arial outlines, independent of the viewer's fonts
 }
 import logging
-logging.getLogger("matplotlib.font_manager").setLevel(logging.ERROR)   # silence "Arial not found" fallbacks
+logging.getLogger("matplotlib.font_manager").setLevel(logging.ERROR)   # fallbacks are reported once below instead
+
+
+def register_arial():
+    """Make Arial / Arial Bold available to matplotlib and return True if it is.
+    Looks in the system fonts first, then $ARIAL_FONT_DIR, ./fonts, and the Arial copy bundled with
+    sigProfilerPlotting (if installed). Arial is not redistributed with this repository."""
+    from matplotlib import font_manager
+    import importlib.util
+
+    def have_arial_bold():
+        path = font_manager.findfont(font_manager.FontProperties(family="Arial", weight="bold"))
+        return os.path.basename(path).lower().startswith("arial")
+
+    if have_arial_bold():
+        return True
+    dirs = [os.environ.get("ARIAL_FONT_DIR"), os.path.join(ROOT, "fonts")]
+    try:
+        spec = importlib.util.find_spec("sigProfilerPlotting")
+        if spec is not None and spec.origin:
+            dirs.append(os.path.join(os.path.dirname(spec.origin), "fonts"))
+    except (ImportError, ValueError):
+        pass
+    for d in dirs:
+        if d and os.path.isdir(d):
+            for fn in os.listdir(d):
+                if fn.lower().startswith("arial") and fn.lower().endswith(".ttf"):
+                    font_manager.fontManager.addfont(os.path.join(d, fn))
+    return have_arial_bold()
+
+
+if not register_arial():
+    print("WARNING: Arial Bold not found - figures fall back to another sans-serif font. "
+          "Install Arial or set ARIAL_FONT_DIR to a folder holding Arial.ttf and 'Arial Bold.ttf'.")
 
 
 def set_style(theme=True, **_ignored):
@@ -280,7 +315,7 @@ def fay_feuer_ci(counts, weights, alpha=0.05):
 
 
 def strip_n(label):
-    """'Neuron(n=17)' -> 'Neuron' (Fig 4b/5b legends show cohort names only)."""
+    """'Neuron (n=17)' -> 'Neuron' (Fig 4b/5b legends show cohort names only)."""
     return re.sub(r"\s*\(n=\d+\)", "", label)
 
 
@@ -296,24 +331,25 @@ FAMILY_PALETTE = dict(zip(FAMILY_LABEL_ORDER, ["#9E9E9E",              # 1×1
                                                "#B09C85", "#7E6148"])) # 1×n / n×1  (NPG tan / brown)
 #  * Fig 2c–d mutation type uses the colour-blind-safe Wong palette (Nature Methods 8:441, 2011):
 #    reddish purple for SBS, orange for indel - distinct from the red/blue (DupCaller/NanoSeq) used elsewhere.
-MUTTYPE_LABEL = {"sbs": "SBS", "indel": "indel"}
-MUTTYPE_PALETTE = {"SBS": "#CC79A7", "indel": "#E69F00"}
+MUTTYPE_LABEL = {"sbs": "SBS", "indel": "Indel"}      # Fig 2 text: first letter of every word capitalized
+MUTTYPE_ORDER = ["SBS", "Indel"]
+MUTTYPE_PALETTE = {"SBS": "#CC79A7", "Indel": "#E69F00"}
 CORDBLOOD_SAMPLES = ["PD48442_NS_1", "PD48442_NS_2", "PD48442_NS_3", "PD48442_NS_4", "PD48442_NS_5", "PD48442_NS_7"]
 SENSITIVITY_FACTOR = 1.32
-TISSUE_LABELS = ["Sperm(n=46)", "Blood(n=15)", "Saliva(n=8)"]
+TISSUE_LABELS = ["Sperm (n=46)", "Blood (n=15)", "Saliva (n=8)"]
 
 # ## Figure 2 — Downsampling benchmark (downsampling)
 # 2a is a schematic (not generated).
 
 set_style(theme=True)
 df6 = DOWNSAMPLING
-# display copy: "×" in read-family configurations, "SBS"/"indel" for mutation type
+# display copy: "×" in read-family configurations, "SBS"/"Indel" for mutation type
 df6_plot = df6.assign(**{"downsampled read family size": df6["downsampled read family size"].map(FAMILY_LABEL),
                          "mutation type": df6["mutation type"].map(MUTTYPE_LABEL)})
 for metric, title in [("precision", "Precision"), ("recall", "Recall")]:
     fig, ax = plt.subplots(figsize=(2.6, 1.8))
     sns.barplot(data=df6_plot, x="mutation type", y=metric, hue="downsampled read family size",
-                order=["SBS", "indel"], hue_order=FAMILY_LABEL_ORDER, palette=FAMILY_PALETTE, saturation=1, errorbar="sd", ax=ax)   # legend: mean ± SD
+                order=MUTTYPE_ORDER, hue_order=FAMILY_LABEL_ORDER, palette=FAMILY_PALETTE, saturation=1, errorbar="sd", ax=ax)   # legend: mean ± SD
     sns.move_legend(ax, "upper left", bbox_to_anchor=(1, 1), title="downsampled\nread family size")
     ax.set_xlabel("")
     ax.set_title(title)
@@ -335,6 +371,11 @@ configuration_keys = sample_keys + ["downsampled read family size"]
 constant_cols = list(category_to_coverage_col.values()) + [weak_calls_col]
 assert df6.groupby(sample_keys)[constant_cols].nunique(dropna=False).eq(1).all().all()
 assert df6[constant_cols + ["false positive rate per duplex base"]].notna().all().all()
+# The neuron totals of weakly supported calls live in their own tab, not as summary rows in `downsampling`.
+if "downsampling_totals" in data:
+    _weak_totals = data["downsampling_totals"].set_index("mutation type")[f"total {weak_calls_col}"]
+    _weak_sums = df6.groupby(sample_keys)[weak_calls_col].first().groupby("mutation type").sum()
+    assert _weak_sums.sort_index().eq(_weak_totals.sort_index()).all(), (_weak_sums, _weak_totals)
 fp_rate_mean = df6.groupby(configuration_keys)["false positive rate per duplex base"].mean()
 coverage_per_sample = df6.groupby(sample_keys)[constant_cols].first()
 predicted_fp_configuration_df = fp_rate_mean.rename("mean false positive rate per duplex base").reset_index()
@@ -349,14 +390,20 @@ predicted_fp_configuration_plot = predicted_fp_configuration_df.assign(**{
     "downsampled read family size": predicted_fp_configuration_df["downsampled read family size"].map(FAMILY_LABEL),
     "mutation type": predicted_fp_configuration_df["mutation type"].map(MUTTYPE_LABEL),
 })
+FP_PER_NEURON_LABEL = "Predicted Additional False-Positive\nCalls Per Neuron Sample"   # Fig 2c and 2d y-axis
+DOT_KW = dict(color="0.15", size=3, alpha=0.7, linewidth=0, zorder=4)            # individual neurons over the boxes
 set_style(theme=True)
 fig, ax = plt.subplots(figsize=(3.0, 2.2))
-sns.boxplot(data=predicted_fp_configuration_plot, x="downsampled read family size",
-            y="predicted false positive number", hue="mutation type", order=FAMILY_LABEL_ORDER,
-            hue_order=["SBS", "indel"], ax=ax, palette=MUTTYPE_PALETTE, saturation=1,
-            width=.7, linewidth=.8, fliersize=2)
-ax.set_ylabel('Predicted False Positive Number')
-sns.move_legend(ax, "upper right")
+# Configurations of the naturally occurring read families in the original neurons (not downsampled data).
+# Boxes and dots share seaborn's default dodge width (0.8) so each strip sits on its box.
+c_kw = dict(data=predicted_fp_configuration_plot, x="downsampled read family size", y="predicted false positive number",
+            hue="mutation type", order=FAMILY_LABEL_ORDER, hue_order=MUTTYPE_ORDER, ax=ax)
+sns.boxplot(**c_kw, palette=MUTTYPE_PALETTE, saturation=1, width=.8, linewidth=.8, showfliers=False)
+sns.stripplot(**c_kw, palette={m: DOT_KW["color"] for m in MUTTYPE_ORDER}, dodge=True, jitter=0.08,
+              legend=False, **{k: v for k, v in DOT_KW.items() if k != "color"})
+ax.set_xlabel("Read-Family Configuration")
+ax.set_ylabel(FP_PER_NEURON_LABEL)
+sns.move_legend(ax, "upper right", title="Mutation Type")
 boldify(fig)
 save(fig, "Figure2c.png")
 
@@ -376,12 +423,19 @@ print(predicted_fp_df.groupby("mutation type")["predicted false positive number"
 predicted_fp_plot = predicted_fp_df.assign(**{"mutation type": predicted_fp_df["mutation type"].map(MUTTYPE_LABEL)})
 set_style(theme=True)
 fig, ax = plt.subplots(figsize=(2.6, 2.2))
-sns.boxplot(data=predicted_fp_plot, x="mutation type", y="predicted false positive number",
-            order=["SBS", "indel"],
-            palette=MUTTYPE_PALETTE, saturation=1, width=.4,
-            linewidth=.8, fliersize=2, ax=ax)
+d_kw = dict(data=predicted_fp_plot, x="mutation type", y="predicted false positive number", order=MUTTYPE_ORDER, ax=ax)
+# hue = x only to colour the boxes; no legend (the x-axis already names SBS / indel)
+sns.boxplot(**d_kw, hue="mutation type", hue_order=MUTTYPE_ORDER, legend=False,
+            palette=MUTTYPE_PALETTE, saturation=1, width=.4, linewidth=.8, showfliers=False)
+sns.stripplot(**d_kw, jitter=0.08, **DOT_KW)
+# The text reports means (boxes show medians): mark them with a diamond
+fp_means = predicted_fp_plot.groupby("mutation type")["predicted false positive number"].mean().reindex(MUTTYPE_ORDER)
+ax.scatter(range(len(fp_means)), fp_means.values, marker="D", s=16, facecolor="white", edgecolor="black",
+           linewidth=0.8, zorder=5)
+ax.legend([Line2D([], [], linestyle="none", marker="D", markersize=4, markerfacecolor="white",
+                  markeredgecolor="black", markeredgewidth=0.8)], ["Mean"], loc="upper right")
 ax.set_xlabel("")
-ax.set_ylabel("Predicted FP Number\nPer Neuron Sample")
+ax.set_ylabel(FP_PER_NEURON_LABEL)
 boldify(fig)
 save(fig, "Figure2d.png")
 
@@ -523,7 +577,21 @@ cordblood_bar([dc_burden, nas_burden, wgs_burden],
 # 6c/6d spectra not generated.
 
 colors = sns.color_palette("Set1")[0:3]
-tissue_handles = [Line2D([], [], linestyle="none", marker="o", markerfacecolor=c, markeredgecolor=c) for c in colors]
+TISSUE_LEGEND_SIZE = 6.5   # compact legend shared by 6a and 6b so it covers no dots
+
+
+def tissue_legend(ax, loc):
+    """Framed tissue legend inside the axes: small markers, tight spacing (text shrunk by shrink_tissue_legend)."""
+    handles = [Line2D([], [], linestyle="none", marker="o", markersize=3, markerfacecolor=c, markeredgecolor=c) for c in colors]
+    ax.legend(handles, TISSUE_LABELS, title="Tissue", loc=loc,
+              borderpad=0.25, labelspacing=0.15, handletextpad=0.1, borderaxespad=0.2)
+
+
+def shrink_tissue_legend(ax):
+    """Call after boldify (which resets legend text to FONT_SIZE)."""
+    for t in ax.get_legend().get_texts() + [ax.get_legend().get_title()]:
+        t.set_fontsize(TISSUE_LEGEND_SIZE)
+
 
 # Figure 6a
 set_style(theme=True)
@@ -536,20 +604,28 @@ ax.plot([0, 6e-7], [0, 6e-7], '--')
 ax.set_ylabel("DupCaller SBS burden")
 ax.set_xlabel("NanoSeq Software SBS burden")
 ax.set_xscale('log'); ax.set_yscale('log')
-ax.legend(tissue_handles, TISSUE_LABELS, title="Tissue", loc='center right')
+tissue_legend(ax, "upper left")
 boldify(fig)
+shrink_tissue_legend(ax)
 save(fig, "Figure6a.png")
 
 # Figure 6b
 set_style(theme=True)
-fig, ax = plt.subplots(figsize=(2.8, 2.4))
+fig, ax = plt.subplots(figsize=(2.6, 2.6))   # same size as Fig 6a
 sns.scatterplot(data=SPERM, y="DupCaller_NanoSeq_SBS_ratio", x="Duplication_Rate",
                 hue="Tissue", hue_order=["Sperm", "Blood", "Saliva"], palette="Set1", s=12, ax=ax)
+ax.set_box_aspect(1)   # square plot area (equal x and y length), like Fig 6a
 ax.set_xlabel("Duplication rate")
 ax.set_ylabel("DupCaller/NanoSeq Software\nSBS ratio")
-ax.legend(tissue_handles, TISSUE_LABELS, title="Tissue", loc='upper right')
+# y-axis starts below 1 with a reference line at 1 (no gain), so the gain at high duplication stays visible
+ax.axhline(1, color="0.5", linestyle="--", linewidth=0.6, zorder=0)
+# top at 2.1 (data max ~1.93) leaves the upper-right corner of the square plot free for the legend
+ax.set_ylim(0.9, max(2.1, SPERM["DupCaller_NanoSeq_SBS_ratio"].max() * 1.09))
+ax.yaxis.set_major_locator(mticker.MultipleLocator(0.25))
+tissue_legend(ax, "upper right")
 plt.tight_layout()
 boldify(fig)
+shrink_tissue_legend(ax)
 save(fig, "Figure6b.png")
 
 # ## Supplementary figures (supplementary_figures_v8)
@@ -570,9 +646,13 @@ def pr_grid(kind, xlsx, mutlevels, xlim, title_unit, fname):
         col, row = nn // 5, nn % 5
         pr = pd.read_excel(xlsx, sample, engine='openpyxl')
         start = np.searchsorted(pr["thr"], 0)
-        thr = np.searchsorted(pr["thr"], 0.05) - 1          # default operating point (lFDR <= 0.05)
+        # default operating point: last threshold with lFDR <= 0.05 (inclusive); -1 if no call passes
+        thr = np.searchsorted(pr["thr"], 0.05, side="right") - 1
         a = ax[row, col]
-        a.scatter(pr.loc[thr, "recall"], pr.loc[thr, "precision"], facecolors='none', edgecolor='r', s=18, linewidths=0.8)
+        if thr >= 0:
+            a.scatter(pr.loc[thr, "recall"], pr.loc[thr, "precision"], facecolors='none', edgecolor='r', s=18, linewidths=0.8)
+        else:
+            print(f"NOTE: {sample} - no calls with lFDR <= 0.05; default operating point not drawn")
         a.plot(pr.loc[start:, "recall"], pr.loc[start:, "precision"], color="r", linewidth=0.6)
         s_nas = nas[nas["Sample"] == sample]
         a.scatter(s_nas["recall"], s_nas["precision"], marker='^', color='b', s=14, linewidths=0)
@@ -622,11 +702,14 @@ def benchmark_long(table):
     return pd.concat(out, ignore_index=True)
 
 
+CALLER_PALETTE = {"DupCaller": sns.color_palette("Set1")[0], "NanoSeq Software": sns.color_palette("Set1")[1]}   # red / blue, as in Fig S1 and the main figures
+
+
 def benchmark_line(long_df, metric, fname, show_legend):
     set_style(theme=True)
     fig, ax = plt.subplots(figsize=(2.2, 2.0))
     sns.lineplot(data=long_df, x="Mutation number", y=metric, hue="Caller", hue_order=["DupCaller", "NanoSeq Software"],
-                 ax=ax, errorbar="sd", err_style="bars", marker="o")
+                 palette=CALLER_PALETTE, ax=ax, errorbar="sd", err_style="bars", marker="o")
     ax.set_ylim([0, 1])
     if show_legend:
         sns.move_legend(ax, "lower right")
@@ -654,9 +737,13 @@ if MAKE_SUPPLEMENTARY:
     set_style(theme=True)
     fig, ax = plt.subplots(figsize=(3.2, 2.8))
     sns.scatterplot(data=COHORTS, y="DupCaller_NanoSeq_SBS_ratio", x="Duplication_Rate", hue="cohort", palette="Set1",
-                    hue_order=["Neuron(n=17)", "Cord blood(n=7)", "Aristolochic acid(n=3)"], s=12, ax=ax)
+                    hue_order=["Neuron (n=17)", "Cord blood (n=7)", "Aristolochic acid (n=3)"], s=12, ax=ax)
     ax.set_xlabel("Duplication rate")
     ax.set_ylabel("DupCaller/NanoSeq Software\nSBS ratio")
+    # y-axis starts below 1 with a reference line at 1 (no gain), so the gain at high duplication stays visible
+    ax.axhline(1, color="0.5", linestyle="--", linewidth=0.6, zorder=0)
+    ax.set_ylim(0.8, COHORTS["DupCaller_NanoSeq_SBS_ratio"].max() * 1.05)
+    ax.yaxis.set_major_locator(mticker.MultipleLocator(1))
     sns.move_legend(ax, "upper right")
     plt.tight_layout()
     boldify(fig)
