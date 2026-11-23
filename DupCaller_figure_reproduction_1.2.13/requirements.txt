@@ -1,6 +1,6 @@
 # tested: pandas 2.2.3 / 3.0.5, matplotlib 3.9.2 / 3.11.2, seaborn 0.13.2, scipy 1.14-1.18, Python 3.13
 pandas>=2.2
-numpy>=1.26
+numpy>=1.26,<2.5    # numpy 2.5 changes RandomState.multinomial draws (SBS96 cosine intervals)
 matplotlib>=3.9
 seaborn==0.13.2
 scipy>=1.11
